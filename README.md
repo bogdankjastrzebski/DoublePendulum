@@ -33,18 +33,12 @@ double pendulum, however, we can monitor it and adjust our knowledge about it.
 The same idea can be applied to various situations, in which we wish to control
 a chaotic system. This is a simple proof of concept that can be easily extended
 to more complex models.
-
-$$
-    h_{t+\Delta} = \text{simulation}(h_t, \Delta)
-$$
+$$h_{t+\Delta} = \text{simulation}(h_t, \Delta)$$
 where $h$ is the true hidden state of the pendulum we with to estimate.
 The observed variable is $x$
-$$
-    x_t \overset{d}{=} \text{project}(h_t) + \xi
-$$
+$$x_t \overset{d}{=} \text{project}(h_t) + \xi$$
 where $\xi$ is a random variable that models the imprecision of our measurement,
 and the project function takes the hidden state, and selects only position of the
 pendulum.
-
 
 
