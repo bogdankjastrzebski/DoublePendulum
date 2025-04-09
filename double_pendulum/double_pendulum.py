@@ -161,4 +161,3 @@ def anim(traj, L1, L2):
     )
     
     plt.show()
-
