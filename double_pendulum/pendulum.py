@@ -3,6 +3,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np  # For initial state and time array creation.
+from types import FunctionType
 
 
 def derivs(state, M1, M2, L1, L2, G):
@@ -54,6 +55,7 @@ def simulate(y, dt, n, M1, M2, L1, L2, G):
         y = update(y, dt, M1, M2, L1, L2, G)
     return y
 
+
 def trajectory(y, dt, n, M1, M2, L1, L2, G):
     """Calculates the trajectory of the double pendulum."""
     return torch.stack([
@@ -61,30 +63,41 @@ def trajectory(y, dt, n, M1, M2, L1, L2, G):
         for _ in range(n)
     ])
 
+
 def project(h):
     """Projects the state vector to position (theta1, theta2)."""
     return h[[0, 2]]
 
-def log_likelihood(ts, xs, h, dt, M1, M2, L1, L2, G,
-                   dist=torch.distributions.MultivariateNormal(
-                       torch.zeros(2), 0.1 * torch.eye(2)),
-                   project=project):
+
+def log_likelihood(ts, xs, h, dt, M1, M2, L1, L2, G, dist, project=project):
     """Calculates the log-likelihood of the measurements."""
-    s = dist.log_prob(xs[0] - project(h))
+    s = dist.log_prob(xs[0] - project(h)) / len(ts)
     for i in range(len(ts) - 1):
         steps = ts[i+1] - ts[i]
         h = simulate(h, dt, steps, M1, M2, L1, L2, G)
-        s += dist.log_prob(xs[i+1] - project(h))
+        s += dist.log_prob(xs[i+1] - project(h)) / len(ts)
     return s
 
-def estimate_parameters(ts, xs, dt, M1, M2, L1, L2, G, iter=100):
+
+def estimate_parameters(
+            ts, xs, dt, M1, M2, L1, L2, G,
+            dist=torch.distributions.MultivariateNormal(
+                torch.zeros(2), 0.1 * torch.eye(2)
+            ),
+            project=project,
+            iter=200,
+            initial=lambda: 0.5 * torch.randn(4),
+        ):
     """Estimates initial state parameters by maximizing log-likelihood."""
-    hidden = torch.nn.Parameter(torch.randn(4))
-    opt = torch.optim.SGD([hidden], lr=0.01, momentum=0.9)
+    initial = initial if type(initial) is not FunctionType else initial()
+    hidden = torch.nn.Parameter(initial)
+    opt = torch.optim.SGD([hidden], lr=0.01, momentum=0.0)
     for _ in (pbar := tqdm(range(iter))):
         opt.zero_grad()
-        loss = -log_likelihood(ts, xs, hidden, dt, M1, M2, L1, L2, G)
+        loss = -log_likelihood(
+            ts, xs, hidden, dt, M1, M2, L1, L2, G, dist, project
+        )
         loss.backward()
         opt.step()
+        pbar.set_description(f"{loss.item()}")
     return hidden
-
