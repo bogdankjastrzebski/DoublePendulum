@@ -1,8 +1,29 @@
 from double_pendulum import *
+import torch
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+import numpy as np  # For initial state and time array creation.
+
+
+def observe(state, dist, project=project):
+    return project(state) + dist.sample()
+
+
+def make_simulation(
+            state, dt, step_size, steps, M1, M2, L1, L2, G, dx=0.01,
+            dist=torch.distributions.MultivariateNormal(
+                torch.zeros(2), 0.01 * torch.eye(2)
+            ),
+        ):
+    return [state] + [
+        state := simulate(state, dt, step_size, M1, M2, L1, L2, G)
+        for _ in range(steps)
+    ]
 
 
 def test_gradient_finite_difference_agreement(
         initial_state, dt, n, M1, M2, L1, L2, G, dx=0.01):
+
     """Tests that auto-diff gradients align with finite diff."""
     def e(i, n=4):
         r = torch.zeros(n)
@@ -50,48 +71,86 @@ def test_gradient_finite_difference_agreement(
     print('Finite Difference: ', d)
     print('Autodiff: ', grad)
 
-def test_log_likelihood_evaluates(initial_state, dt, n, M1, M2, L1, L2, G):
+
+def test_log_likelihood_evaluates(
+            initial_state, dt, n, M1, M2, L1, L2, G,
+            dist=torch.distributions.MultivariateNormal(
+                torch.zeros(2), 0.01 * torch.eye(2)
+            ),
+        ):
     """Tests that log_likelihood evaluates without errors."""
     ts = [0, n]
     y_0 = simulate(initial_state, dt, n, M1, M2, L1, L2, G)
     xs = [
-        project(initial_state).detach() + 0.1 * torch.randn(2),
-        project(y_0).detach() + 0.1 * torch.randn(2),
+        project(initial_state).detach() + dist.sample(),
+        project(y_0).detach() + dist.sample(),
     ]
-    log_likelihood(ts, xs, initial_state, dt, M1, M2, L1, L2, G)
+    print("Log Likelihood:", log_likelihood(ts, xs, initial_state, dt, M1, M2, L1, L2, G, dist))
+
 
 def test_optimization_improves_likelihood(
-            initial_state, dt, n, M1, M2, L1, L2, G
+            initial_state, dt, step_size, steps, M1, M2, L1, L2, G,
+            dist=torch.distributions.MultivariateNormal(
+                torch.zeros(2), 0.01 * torch.eye(2)
+            ),
         ):
     """Tests that optimization increases log-likelihood."""
-    ts = [0, n]
-    y_0 = simulate(initial_state, dt, n, M1, M2, L1, L2, G)
-    xs = [
-        project(initial_state).detach() + 0.1 * torch.randn(2),
-        project(y_0).detach() + 0.1 * torch.randn(2),
-    ]
+    initial_state = initial_state.detach()
 
-    initial_likelihood = log_likelihood(
-        ts, xs, initial_state,
-        dt, M1, M2, L1, L2, G,
+    ts = torch.arange(steps + 1) * step_size # [0, n]
+    hs = make_simulation(
+        initial_state, dt, step_size, steps,
+        M1, M2, L1, L2, G,
     )
+    print('hs', len(hs), hs[-1].shape, hs[-1])
+    xs = list(map(lambda x: observe(x, dist), hs))
+    print('xs', len(xs), xs[-1].shape, xs[-1])
+
+    
     estimated_state = estimate_parameters(
-        ts, xs, dt, M1, M2, L1, L2, G,
+        ts, xs, dt,
+        M1, M2, L1, L2, G,
+        dist,
     )
+    estimated_hs = make_simulation(
+        estimated_state, dt, step_size, steps,
+        M1, M2, L1, L2, G
+    )
+    
     optimized_likelihood = log_likelihood(
         ts, xs, estimated_state,
         dt, M1, M2, L1, L2, G,
+        dist,
+    )
+    initial_likelihood = log_likelihood(
+        ts, xs, initial_state,
+        dt, M1, M2, L1, L2, G,
+        dist,
     )
 
-    print("Initial Likelihood:", initial_likelihood.item())
+    print("=== Optimization Results ===")
+    print("Initial State:", initial_state)
     print("Estimated State:", estimated_state)
+
+    print("---")
+    print("Initial Likelihood:", initial_likelihood.item())
     print("Optimized Likelihood:", optimized_likelihood.item())
+
+    print("---")
+    print("Simulated last state from Initial State:", )
+    print("Simulated last state from Estimated State:", )
+    print("---")
+
+    print("Difference (Y_estimated - Y_0):", y_estimated - y_0)
+    print("Difference (Estimated State - Initial State):",
+          estimated_state - initial_state)
 
     assert optimized_likelihood > initial_likelihood, (
         "Optimization failed to improve log-likelihood. "
         f"Initial: {initial_likelihood}, Optimized:"
         f" {optimized_likelihood}."
     )
+
 
 def animate(traj, L1, L2):
     # Constants (can be moved to a config file)
@@ -101,6 +160,11 @@ def animate(traj, L1, L2):
     y1 = -L1 * traj[:, 0].cos()
     x2 =  L2 * traj[:, 2].sin() + x1
     y2 = -L2 * traj[:, 2].cos() + y1
+
+    fig = plt.figure(figsize=(5,4))
+    plt.plot(traj[:, 0])
+    plt.plot(traj[:, 2])
+    plt.show()
 
     fig = plt.figure(figsize=(5, 4))
     ax = fig.add_subplot(autoscale_on=False, xlim=(-L, L), ylim=(-L, 1.))
@@ -122,7 +186,6 @@ def animate(traj, L1, L2):
         time_text.set_text(time_template % (i * dt.numpy()))
         return line, trace, time_text
 
-
     ani = animation.FuncAnimation(
         fig, animation_frame, len(traj), interval=dt.numpy() * 1000,
         blit=True,
@@ -138,26 +201,27 @@ if __name__ == '__main__':
     L2 = torch.tensor(1.0)
     G = torch.tensor(9.8)
     dt = torch.tensor(0.01)
-    n = 100
+    step_size = 100
+    steps = 1
     initial_state = torch.tensor([
         np.pi/2, 0.0, np.pi / 2, 0.0
     ], dtype=torch.float64)
 
-    traj = trajectory(
-        initial_state, dt, n,
-        M1, M2, L1, L2, G
-    ).detach()
-    animate(traj, L1, L2)
+    # traj = trajectory(
+    #     initial_state, dt, step_size,
+    #     M1, M2, L1, L2, G
+    # ).detach()
+    # animate(traj, L1, L2)
 
     test_gradient_finite_difference_agreement(
-        initial_state, dt, n,
+        initial_state, dt, step_size,
         M1, M2, L1, L2, G,
     )
     test_log_likelihood_evaluates(
-        initial_state, dt, n,
+        initial_state, dt, step_size,
         M1, M2, L1, L2, G,
     )
     test_optimization_improves_likelihood(
-        initial_state, dt, n,
+        initial_state, dt, step_size, steps,
         M1, M2, L1, L2, G,
     )
