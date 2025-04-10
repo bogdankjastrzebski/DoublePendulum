@@ -8,10 +8,16 @@ Double pendulum estimation with Pyro.
 - [x] calculate gradient with pytorch
     - [x] test gradient with finite difference estimator.
         Has very good results. Surprisingly good.
-- [ ] derive the model mathematically.
-- [ ] make a statistical model for two examples.
-- [ ] make a maximum-likelihood estimator.
-
+- [x] derive the model mathematically.
+- [x] make a statistical model for two examples.
+- [x] make a maximum-likelihood estimator.
+- [x] improve code quality
+- [ ] make it work for n points multiple points
+- [ ] write the model in latex.
+- [ ] make visualization of trajectories of individual position parameters, as compared to simulated.
+- [ ] make animation of true and simulated trajectory
+- [ ]
+- [ ]
 
 ## Derivation of the Model
 
