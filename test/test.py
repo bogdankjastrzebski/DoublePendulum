@@ -129,21 +129,39 @@ def test_optimization_improves_likelihood(
     )
 
     print("=== Optimization Results ===")
-    print("Initial State:", initial_state)
-    print("Estimated State:", estimated_state)
+    print("Initial State:", list(initial_state.detach().numpy()))
+    print("Estimated State:", list(estimated_state.detach().numpy()))
 
     print("---")
     print("Initial Likelihood:", initial_likelihood.item())
     print("Optimized Likelihood:", optimized_likelihood.item())
 
-    print("---")
-    print("Simulated last state from Initial State:", )
-    print("Simulated last state from Estimated State:", )
-    print("---")
 
-    print("Difference (Y_estimated - Y_0):", y_estimated - y_0)
-    print("Difference (Estimated State - Initial State):",
-          estimated_state - initial_state)
+    print("---")
+    hs = torch.stack(hs).detach()
+    xs = torch.stack(xs).detach()
+    es = torch.stack(estimated_hs).detach()
+    fig = plt.figure(figsize=(5, 4))
+    plt.plot(ts, hs[:, 0], c='g',)
+    plt.plot(ts, hs[:, 1], c='g',)
+    plt.plot(ts, hs[:, 2], c='g',)
+    plt.plot(ts, hs[:, 3], c='g',)
+    plt.plot(ts, es[:, 0], c='b',)
+    plt.plot(ts, es[:, 1], c='b',)
+    plt.plot(ts, es[:, 2], c='b',)
+    plt.plot(ts, es[:, 3], c='b',)
+    plt.plot(ts, xs[:, 0], c='r', linestyle='--')
+    plt.plot(ts, xs[:, 1], c='r', linestyle='--')
+    plt.show()
+    
+    # print("---")
+    # print("Simulated last state from Initial State:", )
+    # print("Simulated last state from Estimated State:", )
+    # print("---")
+
+    # print("Difference (Y_estimated - Y_0):", y_estimated - y_0)
+    # print("Difference (Estimated State - Initial State):",
+    #       estimated_state - initial_state)
 
     assert optimized_likelihood > initial_likelihood, (
         "Optimization failed to improve log-likelihood. "
@@ -202,7 +220,7 @@ if __name__ == '__main__':
     G = torch.tensor(9.8)
     dt = torch.tensor(0.01)
     step_size = 100
-    steps = 1
+    steps = 5
     initial_state = torch.tensor([
         np.pi/2, 0.0, np.pi / 2, 0.0
     ], dtype=torch.float64)
