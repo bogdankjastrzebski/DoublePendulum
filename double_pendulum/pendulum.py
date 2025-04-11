@@ -85,19 +85,53 @@ def estimate_parameters(
                 torch.zeros(2), 0.1 * torch.eye(2)
             ),
             project=project,
-            iter=200,
-            initial=lambda: 0.5 * torch.randn(4),
+            iter=50,
+            initial=lambda: 0.1 * torch.randn(4),
         ):
     """Estimates initial state parameters by maximizing log-likelihood."""
-    initial = initial if type(initial) is not FunctionType else initial()
+    if type(initial) is FunctionType:
+        initial = initial()
+        initial[[0,2]] = xs[0].float()
     hidden = torch.nn.Parameter(initial)
     opt = torch.optim.SGD([hidden], lr=0.01, momentum=0.0)
+    sch = torch.optim.lr_scheduler.LambdaLR(opt, lr_lambda=lambda i: 0.1/(i + 1))
     for _ in (pbar := tqdm(range(iter))):
         opt.zero_grad()
         loss = -log_likelihood(
             ts, xs, hidden, dt, M1, M2, L1, L2, G, dist, project
         )
         loss.backward()
+        hidden.grad.data.clamp_(-100.0, 100.0) 
         opt.step()
+        sch.step()
         pbar.set_description(f"{loss.item()}")
+    return hidden
+
+
+def estimate_parameters_1(
+            ts, xs, dt, M1, M2, L1, L2, G,
+            dist=torch.distributions.MultivariateNormal(
+                torch.zeros(2), 0.1 * torch.eye(2)
+            ),
+            project=project,
+            iter=10,
+            initial=lambda: 0.1 * torch.randn(4),
+        ):
+    """Estimates initial state parameters by maximizing log-likelihood."""
+    if type(initial) is FunctionType:
+        initial = initial()
+        initial[[0, 2]] = xs[0].float()
+    hidden = torch.nn.Parameter(initial)
+    opt = torch.optim.LBFGS([hidden], lr=0.05, max_iter=10, history_size=4)
+    for _ in (pbar := tqdm(range(iter))):
+        def closure():
+            opt.zero_grad()
+            loss = -log_likelihood(
+                ts, xs, hidden, dt, M1, M2, L1, L2, G, dist, project
+            )
+            loss.backward()
+            # hidden.grad.data.clamp_(-100.0, 100.0) 
+            pbar.set_description(f"{loss.item()}")
+            return loss
+        opt.step(closure)
     return hidden
