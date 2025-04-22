@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np  # For initial state and time array creation.
 from types import FunctionType
+# from torch.autograd.functional import jacobian
+from torch.func import jacrev
 
 
 # def derivs(state, M1, M2, L1, L2, G):
@@ -146,7 +148,7 @@ def log_likelihood(ts, xs, h, dt, m1, m2, l1, l2, g, dist, project=project):
     return s
 
 
-def positions(ts, xs, h, dt, m1, m2, l1, l2, g, project=project):
+def positions(ts, h, dt, m1, m2, l1, l2, g, project=project):
     """Calculates the positions, that can be used to calculate log-likelihood."""
     states = [project(h)]
     for i in range(len(ts) - 1):
@@ -161,7 +163,7 @@ def log_likelihood_from_positions(ps, xs, dist):
     return dist.log_prob(torch.stack(xs) - ps) / ps.shape[0]
 
 
-def estimate_parameters_SGD(
+def estimate_parameters_sgd(
             ts, xs, dt, M1, M2, L1, L2, G,
             dist=torch.distributions.MultivariateNormal(
                 torch.zeros(2), 0.1 * torch.eye(2)
@@ -190,13 +192,16 @@ def estimate_parameters_SGD(
     return hidden
 
 
-def estimate_parameters_LBFGS(
+def estimate_parameters_lbfgs(
             ts, xs, dt, M1, M2, L1, L2, G,
             dist=torch.distributions.MultivariateNormal(
                 torch.zeros(2), 0.1 * torch.eye(2)
             ),
             project=project,
             iter=10,
+            lr=0.05,
+            max_iter=10,
+            history_size=30,
             initial=lambda: 0.1 * torch.randn(4),
         ):
     """Estimates initial state parameters by maximizing log-likelihood."""
@@ -204,7 +209,7 @@ def estimate_parameters_LBFGS(
         initial = initial()
         initial[[0, 2]] = xs[0].float()
     hidden = torch.nn.Parameter(initial)
-    opt = torch.optim.LBFGS([hidden], lr=0.05, max_iter=10, history_size=4)
+    opt = torch.optim.LBFGS([hidden], lr=lr, max_iter=max_iter, history_size=4)
     for _ in (pbar := tqdm(range(iter))):
         def closure():
             opt.zero_grad()
@@ -219,13 +224,14 @@ def estimate_parameters_LBFGS(
     return hidden
 
 
-def estimate_parameters_LBFGS(
-            ts, xs, dt, M1, M2, L1, L2, G,
+def estimate_parameters_gn(
+            ts, xs, dt, m1, m2, l1, l2, g,
             dist=torch.distributions.MultivariateNormal(
                 torch.zeros(2), 0.1 * torch.eye(2)
             ),
             project=project,
             iter=10,
+            lr=0.01,
             initial=lambda: 0.1 * torch.randn(4),
         ):
     """Estimates initial state parameters by maximizing log-likelihood."""
@@ -233,20 +239,29 @@ def estimate_parameters_LBFGS(
         initial = initial()
         initial[[0, 2]] = xs[0].float()
     hidden = torch.nn.Parameter(initial)
-    opt = torch.optim.LBFGS([hidden], lr=0.05, max_iter=10, history_size=4)
     for _ in (pbar := tqdm(range(iter))):
-        def closure():
-            opt.zero_grad()
-            loss = -log_likelihood(
-                ts, xs, hidden, dt, M1, M2, L1, L2, G, dist, project
-            )
-            loss.backward()
-            # hidden.grad.data.clamp_(-100, 100) 
-            pbar.set_description(f"{loss.item()}")
-            return loss
-        opt.step(closure)
+        def halfmodel(h):
+            ps = positions(ts, h, dt, m1, m2, l1, l2, g, project)
+            return ps, ps
+
+        jac, ps = jacrev(halfmodel, has_aux=True)(hidden)
+        
+        
+        # .flatten(0, 1).T
+
+        # hes = jac.T @ jac + torch.eye(jac.shape[1]) / lr
+        
+        # hidden -= torch.solve(hes, jac.T @ (ps - xs))
+
+        print("Jacobian: ", jac.shape)
+        print("Hidden: ", hidden.shape)
+        # print("Positions: ", halfmodel(hidden))
+        print("Positions: ", ps)
+
+        raise Exception("Hello darkness my old friend...")
+
+        pbar.set_description(f"{loss.item()}")
+        return loss
     return hidden
-
-
 
 

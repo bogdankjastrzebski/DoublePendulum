@@ -4,9 +4,11 @@ __all__ = [
     "simulate",
     "trajectory",
     "project",
-    "log_likelihood",
-    "estimate_parameters",
     "positions",
+    "log_likelihood",
+    "estimate_parameters_sgd",
+    "estimate_parameters_lbfgs",
+    "estimate_parameters_gn",
 ]
 
 from .pendulum import (
@@ -15,7 +17,9 @@ from .pendulum import (
     simulate,
     trajectory,
     project,
-    log_likelihood,
-    estimate_parameters,
     positions,
+    log_likelihood,
+    estimate_parameters_sgd,
+    estimate_parameters_lbfgs,
+    estimate_parameters_gn,
 )

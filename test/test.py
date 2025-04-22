@@ -10,19 +10,19 @@ def observe(state, dist, project=project):
 
 
 def make_simulation(
-            state, dt, step_size, steps, M1, M2, L1, L2, G, dx=0.01,
+            state, dt, step_size, steps, m1, m2, l1, l2, g, dx=0.01,
             dist=torch.distributions.MultivariateNormal(
                 torch.zeros(2), 0.01 * torch.eye(2)
             ),
         ):
     return [state] + [
-        state := simulate(state, dt, step_size, M1, M2, L1, L2, G)
+        state := simulate(state, dt, step_size, m1, m2, l1, l2, g)
         for _ in range(steps)
     ]
 
 
 def test_gradient_finite_difference_agreement(
-        initial_state, dt, n, M1, M2, L1, L2, G, dx=0.01):
+        initial_state, dt, n, m1, m2, l1, l2, g, dx=0.01):
 
     """Tests that auto-diff gradients align with finite diff."""
     def e(i, n=4):
@@ -30,11 +30,11 @@ def test_gradient_finite_difference_agreement(
         r[i] = 1.0
         return r
 
-    y_h0 = simulate(initial_state + dt * e(0), dt, n, M1, M2, L1, L2, G)
-    y_h1 = simulate(initial_state + dt * e(1), dt, n, M1, M2, L1, L2, G)
-    y_h2 = simulate(initial_state + dt * e(2), dt, n, M1, M2, L1, L2, G)
-    y_h3 = simulate(initial_state + dt * e(3), dt, n, M1, M2, L1, L2, G)
-    y_0 = simulate(initial_state, dt, n, M1, M2, L1, L2, G)
+    y_h0 = simulate(initial_state + dt * e(0), dt, n, m1, m2, l1, l2, g)
+    y_h1 = simulate(initial_state + dt * e(1), dt, n, m1, m2, l1, l2, g)
+    y_h2 = simulate(initial_state + dt * e(2), dt, n, m1, m2, l1, l2, g)
+    y_h3 = simulate(initial_state + dt * e(3), dt, n, m1, m2, l1, l2, g)
+    y_0 = simulate(initial_state, dt, n, m1, m2, l1, l2, g)
 
     d0 = (y_h0 - y_0)/dx
     d1 = (y_h1 - y_0)/dx
@@ -43,11 +43,11 @@ def test_gradient_finite_difference_agreement(
 
     d = torch.stack([d0, d1, d2, d3])
 
-    def compute_grad(func, initial_state, dt, n, M1, M2, L1, L2, G):
+    def compute_grad(func, initial_state, dt, n, m1, m2, l1, l2, g):
         """Compute the Jacobian of the final state
         with respect to the initial state."""
         initial_state.requires_grad_(True)
-        final_state = func(simulate(initial_state, dt, n, M1, M2, L1, L2, G))
+        final_state = func(simulate(initial_state, dt, n, m1, m2, l1, l2, g))
         return torch.autograd.grad(
             final_state,
             initial_state,
@@ -57,7 +57,7 @@ def test_gradient_finite_difference_agreement(
 
     def grad_lambda(i):
         return compute_grad(
-            lambda x: x[i], initial_state, dt, n, M1, M2, L1, L2, G
+            lambda x: x[i], initial_state, dt, n, m1, m2, l1, l2, g
         )
 
     grad0 = grad_lambda(0) 
@@ -73,23 +73,24 @@ def test_gradient_finite_difference_agreement(
 
 
 def test_log_likelihood_evaluates(
-            initial_state, dt, n, M1, M2, L1, L2, G,
+            initial_state, dt, n, m1, m2, l1, l2, g,
             dist=torch.distributions.MultivariateNormal(
                 torch.zeros(2), 0.01 * torch.eye(2)
             ),
         ):
     """Tests that log_likelihood evaluates without errors."""
     ts = [0, n]
-    y_0 = simulate(initial_state, dt, n, M1, M2, L1, L2, G)
+    y_0 = simulate(initial_state, dt, n, m1, m2, l1, l2, g)
     xs = [
         project(initial_state).detach() + dist.sample(),
         project(y_0).detach() + dist.sample(),
     ]
-    print("Log Likelihood:", log_likelihood(ts, xs, initial_state, dt, M1, M2, L1, L2, G, dist))
+    print("Log Likelihood:", log_likelihood(
+        ts, xs, initial_state, dt, m1, m2, l1, l2, g, dist))
 
 
 def test_optimization_improves_likelihood(
-            initial_state, dt, step_size, steps, M1, M2, L1, L2, G,
+            initial_state, dt, step_size, steps, m1, m2, l1, l2, g,
             dist=torch.distributions.MultivariateNormal(
                 torch.zeros(2), 0.01 * torch.eye(2)
             ),
@@ -100,31 +101,31 @@ def test_optimization_improves_likelihood(
     ts = torch.arange(steps + 1) * step_size # [0, n]
     hs = make_simulation(
         initial_state, dt, step_size, steps,
-        M1, M2, L1, L2, G,
+        m1, m2, l1, l2, g,
     )
     print('hs', len(hs), hs[-1].shape, hs[-1])
     xs = list(map(lambda x: observe(x, dist), hs))
     print('xs', len(xs), xs[-1].shape, xs[-1])
 
     
-    estimated_state = estimate_parameters(
+    estimated_state = estimate_parameters_gn(
         ts, xs, dt,
-        M1, M2, L1, L2, G,
+        m1, m2, l1, l2, g,
         dist,
     )
     estimated_hs = make_simulation(
         estimated_state, dt, step_size, steps,
-        M1, M2, L1, L2, G
+        m1, m2, l1, l2, g
     )
     
     optimized_likelihood = log_likelihood(
         ts, xs, estimated_state,
-        dt, M1, M2, L1, L2, G,
+        dt, m1, m2, l1, l2, g,
         dist,
     )
     initial_likelihood = log_likelihood(
         ts, xs, initial_state,
-        dt, M1, M2, L1, L2, G,
+        dt, m1, m2, l1, l2, g,
         dist,
     )
 
@@ -170,14 +171,14 @@ def test_optimization_improves_likelihood(
     )
 
 
-def animate(traj, L1, L2):
+def animate(traj, l1, l2):
     # Constants (can be moved to a config file)
     L = 2.0  # max combined length for animation
     """Animates the double pendulum trajectory."""
-    x1 =  L1 * traj[:, 0].sin()
-    y1 = -L1 * traj[:, 0].cos()
-    x2 =  L2 * traj[:, 2].sin() + x1
-    y2 = -L2 * traj[:, 2].cos() + y1
+    x1 =  l1 * traj[:, 0].sin()
+    y1 = -l1 * traj[:, 0].cos()
+    x2 =  l2 * traj[:, 2].sin() + x1
+    y2 = -l2 * traj[:, 2].cos() + y1
 
     fig = plt.figure(figsize=(5,4))
     plt.plot(traj[:, 0])
@@ -213,11 +214,11 @@ def animate(traj, L1, L2):
 
 
 if __name__ == '__main__':
-    M1 = torch.tensor(1.0)
-    M2 = torch.tensor(1.0)
-    L1 = torch.tensor(1.0)
-    L2 = torch.tensor(1.0)
-    G = torch.tensor(9.8)
+    m1 = torch.tensor(1.0)
+    m2 = torch.tensor(1.0)
+    l1 = torch.tensor(1.0)
+    l2 = torch.tensor(1.0)
+    g = torch.tensor(9.8)
     dt = torch.tensor(0.01)
     step_size = 100
     steps = 5
@@ -227,19 +228,19 @@ if __name__ == '__main__':
 
     # traj = trajectory(
     #     initial_state, dt, step_size,
-    #     M1, M2, L1, L2, G
+    #     m1, m2, l1, l2, g
     # ).detach()
     # animate(traj, L1, L2)
 
     test_gradient_finite_difference_agreement(
         initial_state, dt, step_size,
-        M1, M2, L1, L2, G,
+        m1, m2, l1, l2, g,
     )
     test_log_likelihood_evaluates(
         initial_state, dt, step_size,
-        M1, M2, L1, L2, G,
+        m1, m2, l1, l2, g,
     )
     test_optimization_improves_likelihood(
         initial_state, dt, step_size, steps,
-        M1, M2, L1, L2, G,
+        m1, m2, l1, l2, g,
     )
