@@ -12,9 +12,10 @@ Double pendulum estimation with Pyro.
 - [x] make a statistical model for two examples.
 - [x] make a maximum-likelihood estimator.
 - [x] improve code quality
-- [ ] make it work for n points multiple points
+- [x] make it work for n points multiple points
 - [ ] write the model in latex.
-- [ ] make visualization of trajectories of individual position parameters, as compared to simulated.
+- [ ] make visualization of trajectories of individual
+    position parameters, as compared to simulated.
 - [ ] make animation of true and simulated trajectory
 - [ ]
 - [ ]
