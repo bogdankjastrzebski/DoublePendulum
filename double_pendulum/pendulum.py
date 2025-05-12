@@ -8,45 +8,6 @@ from types import FunctionType
 from torch.func import jacrev
 
 
-# def derivs(state, M1, M2, L1, L2, G):
-#     """Computes the derivatives for the double pendulum."""
-#     theta1 = state[0]
-#     omega1 = state[1]
-#     theta2 = state[2]
-#     omega2 = state[3]
-# 
-#     dtheta1_dt = omega1
-# 
-#     delta = theta2 - theta1
-#     cos_delta = torch.cos(delta)
-#     sin_delta = torch.sin(delta)
-# 
-#     den1 = (M1 + M2) * L1 - M2 * L1 * cos_delta * cos_delta
-#     domega1_dt = (
-#         M2 * L1 * omega1 * omega1 * sin_delta * cos_delta
-#         + M2 * G * torch.sin(theta2) * cos_delta
-#         + M2 * L2 * omega2 * omega2 * sin_delta
-#         - (M1 + M2) * G * torch.sin(theta1)
-#     ) / den1
-# 
-#     dtheta2_dt = omega2
-# 
-#     den2 = (L2 / L1) * den1
-#     domega2_dt = (
-#         - M2 * L2 * omega2 * omega2 * sin_delta * cos_delta
-#         + (M1 + M2) * G * torch.sin(theta1) * cos_delta
-#         - (M1 + M2) * L1 * omega1 * omega1 * sin_delta
-#         - (M1 + M2) * G * torch.sin(theta2)
-#     ) / den2
-# 
-#     dydx = torch.stack([
-#         dtheta1_dt,
-#         domega1_dt,
-#         dtheta2_dt,
-#         domega2_dt,
-#     ])
-#     return dydx
-
 def double_pendulum_derivatives(
             state,
             mass_1,
