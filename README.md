@@ -1,24 +1,6 @@
 # DoublePendulum
-Double pendulum estimation with Pyro.
-
-## TODO
-
-- [x] make simulation
-- [x] rewrite in pytorch
-- [x] calculate gradient with pytorch
-    - [x] test gradient with finite difference estimator.
-        Has very good results. Surprisingly good.
-- [x] derive the model mathematically.
-- [x] make a statistical model for two examples.
-- [x] make a maximum-likelihood estimator.
-- [x] improve code quality
-- [x] make it work for n points multiple points
-- [ ] write the model in latex.
-- [ ] make visualization of trajectories of individual
-    position parameters, as compared to simulated.
-- [ ] make animation of true and simulated trajectory
-- [ ]
-- [ ]
+Double pendulum estimation. The estimation of double pendulum paramterers based on inaccurate observations. 
+The estimation of the double pendulum is made using Gauss-Newton method. Implementation is writen in PyTorch.
 
 ## Derivation of the Model
 
@@ -48,4 +30,6 @@ where $\xi$ is a random variable that models the imprecision of our measurement,
 and the project function takes the hidden state, and selects only position of the
 pendulum.
 
+## Resources
 
+[A numpy implementation, being an inspiration for the simulator part.](https://matplotlib.org/stable/gallery/animation/double_pendulum.html) 
