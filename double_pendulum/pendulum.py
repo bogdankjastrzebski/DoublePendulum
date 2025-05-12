@@ -160,8 +160,11 @@ def positions(ts, h, dt, m1, m2, l1, l2, g, project=project):
 
 def log_likelihood_from_positions(ps, xs, dist):
     """Calculates log-likelihood from positions."""
-    return dist.log_prob(torch.stack(xs) - ps) / ps.shape[0]
+    return dist.log_prob(xs - ps) / ps.shape[0]
 
+
+INITIAL = lambda: 0.10 * torch.ones(4)
+#lambda: 0.1 * torch.randn(4)
 
 def estimate_parameters_sgd(
             ts, xs, dt, M1, M2, L1, L2, G,
@@ -170,9 +173,10 @@ def estimate_parameters_sgd(
             ),
             project=project,
             iter=50,
-            initial=lambda: 0.1 * torch.randn(4),
+            initial=INITIAL,
         ):
     """Estimates initial state parameters by maximizing log-likelihood."""
+    losses = []
     if type(initial) is FunctionType:
         initial = initial()
         initial[[0,2]] = xs[0].float()
@@ -189,7 +193,8 @@ def estimate_parameters_sgd(
         opt.step()
         sch.step()
         pbar.set_description(f"{loss.item()}")
-    return hidden
+        losses.append(loss.item())
+    return hidden, losses
 
 
 def estimate_parameters_lbfgs(
@@ -202,9 +207,10 @@ def estimate_parameters_lbfgs(
             lr=0.05,
             max_iter=10,
             history_size=30,
-            initial=lambda: 0.1 * torch.randn(4),
+            initial=INITIAL,
         ):
     """Estimates initial state parameters by maximizing log-likelihood."""
+    losses = []
     if type(initial) is FunctionType:
         initial = initial()
         initial[[0, 2]] = xs[0].float()
@@ -219,9 +225,10 @@ def estimate_parameters_lbfgs(
             loss.backward()
             # hidden.grad.data.clamp_(-100, 100) 
             pbar.set_description(f"{loss.item()}")
+            losses.append(loss.item())
             return loss
         opt.step(closure)
-    return hidden
+    return hidden, losses
 
 
 def estimate_parameters_gn(
@@ -230,38 +237,49 @@ def estimate_parameters_gn(
                 torch.zeros(2), 0.1 * torch.eye(2)
             ),
             project=project,
-            iter=10,
-            lr=0.01,
-            initial=lambda: 0.1 * torch.randn(4),
+            iter=20,
+            lr=100,
+            initial=INITIAL,
         ):
     """Estimates initial state parameters by maximizing log-likelihood."""
+    losses = []
     if type(initial) is FunctionType:
         initial = initial()
         initial[[0, 2]] = xs[0].float()
-    hidden = torch.nn.Parameter(initial)
+    hidden = initial
+    xs = torch.stack(xs).float()
+    def halfmodel(h):
+        ps = positions(ts, h, dt, m1, m2, l1, l2, g, project)
+        return ps, ps
     for _ in (pbar := tqdm(range(iter))):
-        def halfmodel(h):
-            ps = positions(ts, h, dt, m1, m2, l1, l2, g, project)
-            return ps, ps
 
         jac, ps = jacrev(halfmodel, has_aux=True)(hidden)
-        
-        
-        # .flatten(0, 1).T
+        jac = jac.flatten(0, 1)
+        hes = jac.T @ jac + torch.eye(jac.shape[1]) / lr
 
-        # hes = jac.T @ jac + torch.eye(jac.shape[1]) / lr
-        
-        # hidden -= torch.solve(hes, jac.T @ (ps - xs))
+        # print("Xs: ", xs.shape, xs.dtype)
+        # print("Ps: ", ps.shape, ps.dtype)
+        # print("", (ps - xs).flatten().shape)
+        # print("", (jac.T @ (ps - xs).flatten()).shape)
 
-        print("Jacobian: ", jac.shape)
-        print("Hidden: ", hidden.shape)
-        # print("Positions: ", halfmodel(hidden))
-        print("Positions: ", ps)
+        hidden = hidden - torch.linalg.solve(hes, jac.T @ (ps - xs).flatten())
 
-        raise Exception("Hello darkness my old friend...")
+        # print("Xs: ", xs.shape)
+        # print("Jacobian: ", jac.shape)
+        # print("Hes: ", hes.shape, hes)
+        # # print("Positions: ", halfmodel(hidden))
+        # print("Positions: ", ps)
+        # print("Hidden: ", hidden.shape)
+        # print("Hidden: ", hidden)
 
-        pbar.set_description(f"{loss.item()}")
-        return loss
-    return hidden
+        with torch.no_grad():
+            L = - log_likelihood(
+                ts, xs, hidden, dt, m1, m2, l1, l2, g, dist, project=project
+            )
+                # raise Exception("Hello darkness my old friend...")
+            # L = log_likelihood_from_positions(ps, xs, dist)
+            pbar.set_description(f"{L.item()}")
+            losses.append(L.item())
+    return hidden, losses
 
 
